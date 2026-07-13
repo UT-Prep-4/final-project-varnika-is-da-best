@@ -1,0 +1,49 @@
+name: Check Final Project
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-submission:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run grading tests
+        id: grading
+        run: |
+          set +e
+          output=$(python tests/test_final_project.py 2>&1)
+          exit_code=$?
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$output" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Post results as commit comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `${{ steps.grading.outputs.output }}`;
+            const exit_code = `${{ steps.grading.outputs.exit_code }}`;
+            const status = exit_code === '0' ? '✅ All checks passed!' : '❌ Some checks failed.';
+            const body = `## Autograder Results\n\n${status}\n\n\`\`\`\n${output}\n\`\`\`\n\n*Note: this checks the showcase-readiness basics. The real judges are the humans at showcase!*`;
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: body
+            });
